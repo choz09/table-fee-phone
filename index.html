@@ -9,7 +9,7 @@
 <style>
 :root{--bg:#f7f4ec;--card:#fff;--ink:#141311;--sub:#6b6358;--line:#d6ccb4;--acc:#6e5220;--gold:#c9a15c;--wood:#f0dfc0;--vac:#ebe9e4;--red:#a33a2a}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;padding:max(12px,env(safe-area-inset-top)) 16px 32px}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;padding:max(12px,env(safe-area-inset-top)) 16px 120px}
 header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
 h1{font-size:18px;margin:0}
 #st{font-size:13px;color:var(--sub)}
@@ -81,7 +81,7 @@ function draw(){
       b=`<div class="row"><span class="nm">卓${n}</span><span class="tag">空席</span></div>`;
     }
     (t.resv||[]).forEach(r=>{ b+=`<div class="resv"><b>予約 ${hm(r.at)}</b>${r.name?' '+esc(r.name)+' 様':''}${r.phone?' '+esc(r.phone):''}${(r.lines||[]).map(l=>'<br>'+esc(l)).join('')}</div>`; });
-    h+=`<div class="t ${t.kind==='rental'?'rental':t.kind==='free'?'free':'vacant'}">${b}</div>`;
+    h+=`<div class="t ${t.kind==='rental'&&t.start?'rental':t.kind==='free'?'free':'vacant'}">${b}</div>`;
   });
   m.innerHTML=h;
 }
