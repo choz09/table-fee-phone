@@ -33,6 +33,23 @@ h1{font-size:18px;margin:0}
 #login{display:none}
 input{font-size:18px;padding:10px;width:100%;border:1px solid var(--line);border-radius:8px;margin:10px 0}
 button{font-size:16px;padding:12px 18px;border-radius:8px;border:1px solid var(--ink);background:var(--ink);color:#fff}
+.t.vacant.go{cursor:pointer}
+.t.vacant.go .tag{color:var(--acc);font-weight:700}
+#toast{position:fixed;left:16px;right:16px;bottom:max(20px,env(safe-area-inset-bottom));background:var(--ink);color:#fff;border-radius:8px;padding:12px 14px;display:none;z-index:20}
+#toast.bad{background:var(--red)}
+#sheet{display:none;position:fixed;inset:0;background:rgba(20,19,17,.45);z-index:10;align-items:flex-end}
+#sheet.on{display:flex}
+#sheet .box{background:var(--bg);width:100%;border-radius:14px 14px 0 0;padding:16px 16px max(20px,env(safe-area-inset-bottom))}
+#sheet h2{font-size:18px;margin:0 0 10px}
+.opt{display:flex;gap:8px;margin:6px 0 12px;align-items:center}
+.opt button{flex:1;background:#fff;color:var(--ink);border:1px solid var(--line)}
+.opt button.sel{background:var(--ink);color:#fff;border-color:var(--ink)}
+.opt .n{flex:0 0 auto;min-width:48px;text-align:center;font-size:22px;font-weight:700}
+.opt button.sq{flex:0 0 56px}
+.lab{font-size:13px;color:var(--sub)}
+.acts{display:flex;gap:10px;margin-top:6px}
+.acts .go2{flex:2;background:var(--acc);border-color:var(--acc)}
+.acts .cn{flex:1;background:#fff;color:var(--ink);border:1px solid var(--line)}
 .lk{background:none;border:none;color:var(--sub);text-decoration:underline;font-size:13px;padding:8px 0}
 </style>
 </head>
@@ -40,9 +57,11 @@ button{font-size:16px;padding:12px 18px;border-radius:8px;border:1px solid var(-
 <header><h1>貸卓モニター</h1><span id="st">接続中…</span></header>
 <div id="login"><p>合言葉(売上ログのLOG_KEY)を入力してください。この端末に保存されます。</p><input id="k" type="password" autocomplete="off"><button id="ok">保存して開始</button></div>
 <div id="main"></div>
+<div id="toast"></div>
+<div id="sheet"><div class="box"></div></div>
 <button class="lk" id="out">合言葉を入れ直す</button>
 <script>
-// 見る専用(段階A)。合言葉はファイルに入れず、この端末のlocalStorageに保存する
+// 段階A(見る)+段階B-1(開始)。合言葉はファイルに入れず、この端末のlocalStorageに保存する
 const URL_LOG='https://script.google.com/macros/s/AKfycbxIfSn9WJjPPgHnS_b7baRvRSMHtgHT7744fnvImm2yK9tgFCnfAQHfuVRAdWh5gLMOSQ/exec';
 const $=id=>document.getElementById(id);
 const yen=n=>'¥'+Number(n).toLocaleString('ja-JP');
@@ -55,7 +74,7 @@ function get(){
   if(!key||busy) return; busy=true;
   fetch(URL_LOG+'?view=1&key='+encodeURIComponent(key)).then(r=>r.json()).then(j=>{
     if(!j.ok){ if(j.error==='key'){ $('st').textContent='合言葉が違います'; $('st').className='bad'; } return; }
-    snap=j.snap; skew=j.now-Date.now(); lastOk=Date.now(); draw();
+    snap=j.snap; skew=j.now-Date.now(); lastOk=Date.now(); draw(); checkPend(j.res);
   }).catch(()=>{}).finally(()=>{busy=false;});
 }
 function draw(){
@@ -78,12 +97,54 @@ function draw(){
     } else if(t.kind==='free'){
       b=`<div class="row"><span class="nm">卓${n} フリー${t.freeOpen?' ( 稼働中 )':''}</span><span class="sub">精算済み ${yen(t.freeAmt||0)}</span></div>`;
     } else {
-      b=`<div class="row"><span class="nm">卓${n}</span><span class="tag">空席</span></div>`;
+      b=`<div class="row"><span class="nm">卓${n}</span><span class="tag">${t.kind==='rental'?'空席 ・ タップで開始':'空席'}</span></div>`;
     }
     (t.resv||[]).forEach(r=>{ b+=`<div class="resv"><b>予約 ${hm(r.at)}</b>${r.name?' '+esc(r.name)+' 様':''}${r.phone?' '+esc(r.phone):''}${(r.lines||[]).map(l=>'<br>'+esc(l)).join('')}</div>`; });
-    h+=`<div class="t ${t.kind==='rental'&&t.start?'rental':t.kind==='free'?'free':'vacant'}">${b}</div>`;
+    const can=t.kind==='rental'&&!t.start;
+    h+=`<div class="t ${t.kind==='rental'&&t.start?'rental':t.kind==='free'?'free':'vacant'}${can?' go':''}"${can?' data-n="'+n+'"':''}>${b}</div>`;
   });
   m.innerHTML=h;
+}
+// ---- 開始(段階B-1)。指示を窓口に預け、NECが数秒で受け取って実行する ----
+let sh=null, pend=null;
+const OPT=(k,v,l)=>`<button class="${sh[k]===v?'sel':''}" data-k="${k}" data-v="${v}">${l}</button>`;
+function drawSheet(){
+  const el=$('sheet'); el.classList.toggle('on',!!sh); if(!sh) return;
+  el.querySelector('.box').innerHTML=`<h2>卓${sh.n} を開始</h2>
+  <div class="lab">人数</div><div class="opt"><button class="sq" data-d="-1">−</button><span class="n">${sh.people}</span><button class="sq" data-d="1">＋</button></div>
+  <div class="lab">区分</div><div class="opt">${OPT('cust','general','一般')}${OPT('cust','student','学生')}</div>
+  <div class="lab">プラン</div><div class="opt">${OPT('plan','hourly','通常')}${OPT('plan','pack','6時間パック')}</div>
+  <div class="lab">ドリンクバー</div><div class="opt">${OPT('drink',0,'なし')}${OPT('drink',1,'あり')}</div>
+  <div class="acts"><button class="cn" data-x="cancel">やめる</button><button class="go2" data-x="go">開始する</button></div>`;
+}
+function toast(msg,bad){ const t=$('toast'); t.textContent=msg; t.className=bad?'bad':''; t.style.display='block'; clearTimeout(toast.h); toast.h=setTimeout(()=>{t.style.display='none';},bad?8000:4000); }
+$('main').addEventListener('click',e=>{ const c=e.target.closest('.t.go'); if(!c) return; sh={n:+c.dataset.n,people:4,cust:'general',plan:'hourly',drink:0}; drawSheet(); });
+$('sheet').addEventListener('click',e=>{
+  if(e.target.id==='sheet'){ sh=null; drawSheet(); return; }
+  const b=e.target.closest('button'); if(!b||!sh) return;
+  if(b.dataset.d) sh.people=Math.min(12,Math.max(1,sh.people+(+b.dataset.d)));
+  else if(b.dataset.k) sh[b.dataset.k]=(b.dataset.k==='drink')?+b.dataset.v:b.dataset.v;
+  else if(b.dataset.x==='cancel'){ sh=null; }
+  else if(b.dataset.x==='go'){
+    const id='c'+Date.now()+Math.random().toString(36).slice(2,6);
+    const cmd={id,type:'start',table:sh.n,people:sh.people,cust:sh.cust,plan:sh.plan,drink:sh.drink};
+    b.disabled=true; b.textContent='送信中…';
+    fetch(URL_LOG,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key,cmd})}).then(r=>r.json()).then(j=>{
+      if(!j.ok) throw new Error(j.error||'送れません');
+      pend={id,at:Date.now()}; sh=null; drawSheet(); toast('指示を送りました。NECが受け取るまで数秒かかります'); fast();
+    }).catch(err=>{ toast('送れませんでした: '+err.message,true); b.disabled=false; b.textContent='開始する'; });
+    return;
+  }
+  drawSheet();
+});
+// 送ったあとは、結果が返るまで2秒ごとに確認する(最大30秒)
+let fastH=null;
+function fast(){ clearInterval(fastH); let n=0; fastH=setInterval(()=>{ get(); if(!pend||++n>15) clearInterval(fastH); },2000); }
+function checkPend(res){
+  if(!pend) return;
+  const r=res&&res[pend.id];
+  if(r){ toast(r.msg||(r.ok?'完了しました':'できませんでした'),!r.ok); pend=null; }
+  else if(Date.now()-pend.at>40000){ toast('NECから返事がありません。会計ツールが開いているか確認してください',true); pend=null; }
 }
 $('ok').onclick=()=>{ key=$('k').value.trim(); try{localStorage.setItem('tf_key',key);}catch(e){} $('k').value=''; get(); };
 $('out').onclick=()=>{ key=''; try{localStorage.removeItem('tf_key');}catch(e){} snap=null; draw(); };
