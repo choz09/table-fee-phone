@@ -76,7 +76,7 @@ function draw(){
       const tags=[t.cust==='student'?'学生':'一般', t.people+'人', t.special?'特別料金':(t.plan==='pack'?'6時間パック':'通常'), t.drink?'ドリンクバー':'', t.coupons.length?'クーポン'+t.coupons.length+'枚':''].filter(Boolean).join(' ・ ');
       b=`<div class="row"><span class="nm">卓${n} 貸卓</span><span class="clk">${q(hh)}:${q(mi)}:${q(s2)}</span></div><div class="row"><span class="sub">${hm(t.start)} 開始 ・ ${tags}</span><span class="amt">${yen(t.total)}</span></div>`;
     } else if(t.kind==='free'){
-      b=`<div class="row"><span class="nm">卓${n} フリー${t.freeOpen?' (打っている最中)':''}</span><span class="sub">精算済み ${yen(t.freeAmt||0)}</span></div>`;
+      b=`<div class="row"><span class="nm">卓${n} フリー${t.freeOpen?' (稼働中)':''}</span><span class="sub">精算済み ${yen(t.freeAmt||0)}</span></div>`;
     } else {
       b=`<div class="row"><span class="nm">卓${n}</span><span class="tag">空席</span></div>`;
     }
