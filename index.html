@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="貸卓">
+<title>貸卓モニター</title>
+<style>
+:root{--bg:#f7f4ec;--card:#fff;--ink:#141311;--sub:#6b6358;--line:#d6ccb4;--acc:#6e5220;--gold:#c9a15c;--wood:#f0dfc0;--vac:#ebe9e4;--red:#a33a2a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;padding:max(12px,env(safe-area-inset-top)) 16px 32px}
+header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+h1{font-size:18px;margin:0}
+#st{font-size:13px;color:var(--sub)}
+#st.bad{color:var(--red);font-weight:700}
+.t{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px}
+.t.rental{border:3px solid var(--acc)}
+.t.free{background:var(--wood)}
+.t.vacant{background:var(--vac)}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.nm{font-weight:700}
+.tag{font-size:13px;color:var(--sub)}
+.amt{font:700 26px/1.2 "Hiragino Mincho ProN","Noto Serif JP",serif;color:var(--acc)}
+.clk{font:600 22px/1.2 "Hiragino Mincho ProN","Noto Serif JP",serif;font-variant-numeric:tabular-nums}
+.sub{font-size:14px;color:var(--sub)}
+.resv{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-size:14px}
+.sales{background:var(--ink);color:#fff;border-radius:8px;padding:14px 16px;margin-bottom:12px}
+.sales small{color:#cfc6b0}
+.sales .big{font:700 34px/1.2 "Hiragino Mincho ProN","Noto Serif JP",serif;color:var(--gold);text-align:right}
+.sales table{width:100%;font-size:15px}
+.sales td:last-child{text-align:right}
+#login{display:none}
+input{font-size:18px;padding:10px;width:100%;border:1px solid var(--line);border-radius:8px;margin:10px 0}
+button{font-size:16px;padding:12px 18px;border-radius:8px;border:1px solid var(--ink);background:var(--ink);color:#fff}
+.lk{background:none;border:none;color:var(--sub);text-decoration:underline;font-size:13px;padding:8px 0}
+</style>
+</head>
+<body>
+<header><h1>貸卓モニター</h1><span id="st">接続中…</span></header>
+<div id="login"><p>合言葉(売上ログのLOG_KEY)を入力してください。この端末に保存されます。</p><input id="k" type="password" autocomplete="off"><button id="ok">保存して開始</button></div>
+<div id="main"></div>
+<button class="lk" id="out">合言葉を入れ直す</button>
+<script>
+// 見る専用(段階A)。合言葉はファイルに入れず、この端末のlocalStorageに保存する
+const URL_LOG='https://script.google.com/macros/s/AKfycbxIfSn9WJjPPgHnS_b7baRvRSMHtgHT7744fnvImm2yK9tgFCnfAQHfuVRAdWh5gLMOSQ/exec';
+const $=id=>document.getElementById(id);
+const yen=n=>'¥'+Number(n).toLocaleString('ja-JP');
+const esc=x=>String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const q=x=>String(x).padStart(2,'0');
+const hm=ms=>{const d=new Date(ms);return q(d.getHours())+':'+q(d.getMinutes());};
+let key=''; try{key=localStorage.getItem('tf_key')||'';}catch(e){}
+let snap=null, skew=0, lastOk=0, busy=false;
+function get(){
+  if(!key||busy) return; busy=true;
+  fetch(URL_LOG+'?view=1&key='+encodeURIComponent(key)).then(r=>r.json()).then(j=>{
+    if(!j.ok){ if(j.error==='key'){ $('st').textContent='合言葉が違います'; $('st').className='bad'; } return; }
+    snap=j.snap; skew=j.now-Date.now(); lastOk=Date.now(); draw();
+  }).catch(()=>{}).finally(()=>{busy=false;});
+}
+function draw(){
+  const m=$('main'), st=$('st');
+  if(!key){ $('login').style.display='block'; m.innerHTML=''; return; }
+  $('login').style.display='none';
+  if(!snap){ st.textContent='会計ツールからのデータがありません'; st.className='bad'; m.innerHTML=''; return; }
+  const now=Date.now()+skew, age=Math.round((now-snap.ts)/1000);
+  st.textContent = age>30 ? '会計ツール(NEC)が'+(age>120?Math.round(age/60)+'分':age+'秒')+'前から止まっています' : 'NECと接続中 ('+hm(snap.ts)+' 更新)';
+  st.className = age>30 ? 'bad' : '';
+  const s=snap.sales;
+  let h=`<div class="sales"><table><tr><td>フリー</td><td>${s.free==null?'－':yen(s.free)}</td></tr><tr><td>貸卓 (${s.rentN}組)</td><td>${yen(s.rent)}</td></tr></table><small>今日の売上 合計</small><div class="big">${yen((s.free||0)+s.rent)}</div></div>`;
+  snap.order.forEach(n=>{
+    const t=snap.tables[n]; if(!t) return;
+    let b='';
+    if(t.kind==='rental'&&t.start){
+      const el=Math.max(0,Math.floor((now-t.start)/1000)), s2=el%60, mi=Math.floor(el/60)%60, hh=Math.floor(el/3600);
+      const tags=[t.cust==='student'?'学生':'一般', t.people+'人', t.special?'特別料金':(t.plan==='pack'?'6時間パック':'通常'), t.drink?'ドリンクバー':'', t.coupons.length?'クーポン'+t.coupons.length+'枚':''].filter(Boolean).join(' ・ ');
+      b=`<div class="row"><span class="nm">卓${n} 貸卓</span><span class="clk">${q(hh)}:${q(mi)}:${q(s2)}</span></div><div class="row"><span class="sub">${hm(t.start)} 開始 ・ ${tags}</span><span class="amt">${yen(t.total)}</span></div>`;
+    } else if(t.kind==='free'){
+      b=`<div class="row"><span class="nm">卓${n} フリー${t.freeOpen?' (打っている最中)':''}</span><span class="sub">精算済み ${yen(t.freeAmt||0)}</span></div>`;
+    } else {
+      b=`<div class="row"><span class="nm">卓${n}</span><span class="tag">空席</span></div>`;
+    }
+    (t.resv||[]).forEach(r=>{ b+=`<div class="resv"><b>予約 ${hm(r.at)}</b>${r.name?' '+esc(r.name)+' 様':''}${r.phone?' '+esc(r.phone):''}${(r.lines||[]).map(l=>'<br>'+esc(l)).join('')}</div>`; });
+    h+=`<div class="t ${t.kind==='rental'?'rental':t.kind==='free'?'free':'vacant'}">${b}</div>`;
+  });
+  m.innerHTML=h;
+}
+$('ok').onclick=()=>{ key=$('k').value.trim(); try{localStorage.setItem('tf_key',key);}catch(e){} $('k').value=''; get(); };
+$('out').onclick=()=>{ key=''; try{localStorage.removeItem('tf_key');}catch(e){} snap=null; draw(); };
+draw(); get();
+setInterval(get,5000); setInterval(()=>{ if(snap) draw(); },1000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) get(); });
+</script>
+</body>
+</html>
