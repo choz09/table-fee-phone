@@ -68,7 +68,7 @@ function draw(){
   st.className = age>30 ? 'bad' : '';
   const s=snap.sales;
   let h=`<div class="sales"><table><tr><td>フリー</td><td>${s.free==null?'－':yen(s.free)}</td></tr><tr><td>貸卓 (${s.rentN}組)</td><td>${yen(s.rent)}</td></tr></table><small>今日の売上 合計</small><div class="big">${yen((s.free||0)+s.rent)}</div></div>`;
-  snap.order.forEach(n=>{
+  snap.order.slice().sort((a,b)=>a-b).forEach(n=>{   // スマホは卓1→6の順(NECの画面の並びとは別)
     const t=snap.tables[n]; if(!t) return;
     let b='';
     if(t.kind==='rental'&&t.start){
