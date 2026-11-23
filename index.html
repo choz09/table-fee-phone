@@ -33,7 +33,7 @@ h1{font-size:18px;margin:0}
 #login{display:none}
 input{font-size:18px;padding:10px;width:100%;border:1px solid var(--line);border-radius:8px;margin:10px 0}
 button{font-size:16px;padding:12px 18px;border-radius:8px;border:1px solid var(--ink);background:var(--ink);color:#fff}
-.t.vacant.go{cursor:pointer}
+.t.go{cursor:pointer}
 .t.vacant.go .tag{color:var(--acc);font-weight:700}
 #toast{position:fixed;left:16px;right:16px;bottom:max(20px,env(safe-area-inset-bottom));background:var(--ink);color:#fff;border-radius:8px;padding:12px 14px;display:none;z-index:20}
 #toast.bad{background:var(--red)}
@@ -74,7 +74,7 @@ function get(){
   if(!key||busy) return; busy=true;
   fetch(URL_LOG+'?view=1&key='+encodeURIComponent(key)).then(r=>r.json()).then(j=>{
     if(!j.ok){ if(j.error==='key'){ $('st').textContent='合言葉が違います'; $('st').className='bad'; } return; }
-    snap=j.snap; skew=j.now-Date.now(); lastOk=Date.now(); draw(); checkPend(j.res);
+    snap=j.snap; skew=j.now-Date.now(); lastOk=Date.now(); draw(); if(sh&&sh.mode==='pay') drawSheet(); checkPend(j.res);
   }).catch(()=>{}).finally(()=>{busy=false;});
 }
 function draw(){
@@ -100,7 +100,7 @@ function draw(){
       b=`<div class="row"><span class="nm">卓${n}</span><span class="tag">${t.kind==='rental'?'空席 ・ タップで開始':'空席'}</span></div>`;
     }
     (t.resv||[]).forEach(r=>{ b+=`<div class="resv"><b>予約 ${hm(r.at)}</b>${r.name?' '+esc(r.name)+' 様':''}${r.phone?' '+esc(r.phone):''}${(r.lines||[]).map(l=>'<br>'+esc(l)).join('')}</div>`; });
-    const can=t.kind==='rental'&&!t.start;
+    const can=t.kind==='rental';
     h+=`<div class="t ${t.kind==='rental'&&t.start?'rental':t.kind==='free'?'free':'vacant'}${can?' go':''}"${can?' data-n="'+n+'"':''}>${b}</div>`;
   });
   m.innerHTML=h;
@@ -110,6 +110,7 @@ let sh=null, pend=null;
 const OPT=(k,v,l)=>`<button class="${sh[k]===v?'sel':''}" data-k="${k}" data-v="${v}">${l}</button>`;
 function drawSheet(){
   const el=$('sheet'); el.classList.toggle('on',!!sh); if(!sh) return;
+  if(sh.mode==='pay'){ el.querySelector('.box').innerHTML=paySheet(); return; }
   el.querySelector('.box').innerHTML=`<h2>卓${sh.n} を開始</h2>
   <div class="lab">人数</div><div class="opt"><button class="sq" data-d="-1">−</button><span class="n">${sh.people}</span><button class="sq" data-d="1">＋</button></div>
   <div class="lab">区分</div><div class="opt">${OPT('cust','general','一般')}${OPT('cust','student','学生')}</div>
@@ -117,14 +118,37 @@ function drawSheet(){
   <div class="lab">ドリンクバー</div><div class="opt">${OPT('drink',0,'なし')}${OPT('drink',1,'あり')}</div>
   <div class="acts"><button class="cn" data-x="cancel">やめる</button><button class="go2" data-x="go">開始する</button></div>`;
 }
+function paySheet(){
+  const t=snap&&snap.tables[sh.n]; if(!t||!t.start) return '<h2>卓'+sh.n+'</h2><p>この卓は、もう使用中ではありません。</p><div class="acts"><button class="cn" data-x="cancel">閉じる</button></div>';
+  const tags=[t.cust==='student'?'学生':'一般', t.people+'人', t.special?'特別料金':(t.plan==='pack'?'6時間パック':'通常'), t.drink?'ドリンクバー':'', t.coupons.length?'クーポン'+t.coupons.length+'枚':''].filter(Boolean).join(' ・ ');
+  return `<h2>卓${sh.n} の会計</h2><p class="sub">${hm(t.start)} 開始 ・ ${tags}</p><div class="lab">会計額</div><div class="amt" style="font-size:34px">${yen(t.total)}</div>
+  <p class="sub">金額は、数秒ごとに更新されます。押した時点の金額と違っていたら、会計せずに知らせます。</p>
+  <div class="acts"><button class="cn" data-x="cancel">やめる</button><button class="go2" data-x="done">会計完了</button></div>`;
+}
 function toast(msg,bad){ const t=$('toast'); t.textContent=msg; t.className=bad?'bad':''; t.style.display='block'; clearTimeout(toast.h); toast.h=setTimeout(()=>{t.style.display='none';},bad?8000:4000); }
-$('main').addEventListener('click',e=>{ const c=e.target.closest('.t.go'); if(!c) return; sh={n:+c.dataset.n,people:4,cust:'general',plan:'hourly',drink:0}; drawSheet(); });
+$('main').addEventListener('click',e=>{
+  const c=e.target.closest('.t.go'); if(!c) return; const n=+c.dataset.n, t=snap&&snap.tables[n];
+  if(t&&t.start) sh={mode:'pay',n}; else sh={mode:'start',n,people:4,cust:'general',plan:'hourly',drink:0};
+  drawSheet();
+});
 $('sheet').addEventListener('click',e=>{
   if(e.target.id==='sheet'){ sh=null; drawSheet(); return; }
   const b=e.target.closest('button'); if(!b||!sh) return;
   if(b.dataset.d) sh.people=Math.min(12,Math.max(1,sh.people+(+b.dataset.d)));
   else if(b.dataset.k) sh[b.dataset.k]=(b.dataset.k==='drink')?+b.dataset.v:b.dataset.v;
   else if(b.dataset.x==='cancel'){ sh=null; }
+  else if(b.dataset.x==='done'){
+    const t=snap&&snap.tables[sh.n]; if(!t||!t.start) return;
+    if(!confirm('卓'+sh.n+' を '+yen(t.total)+' で会計完了にします。よろしいですか?')) return;
+    const id='c'+Date.now()+Math.random().toString(36).slice(2,6);
+    const cmd={id,type:'done',table:sh.n,expect:t.total};
+    b.disabled=true; b.textContent='送信中…';
+    fetch(URL_LOG,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key,cmd})}).then(r=>r.json()).then(j=>{
+      if(!j.ok) throw new Error(j.error||'送れません');
+      pend={id,at:Date.now()}; sh=null; drawSheet(); toast('会計の指示を送りました。NECが受け取るまで数秒かかります'); fast();
+    }).catch(err=>{ toast('送れませんでした: '+err.message,true); b.disabled=false; b.textContent='会計完了'; });
+    return;
+  }
   else if(b.dataset.x==='go'){
     const id='c'+Date.now()+Math.random().toString(36).slice(2,6);
     const cmd={id,type:'start',table:sh.n,people:sh.people,cust:sh.cust,plan:sh.plan,drink:sh.drink};
