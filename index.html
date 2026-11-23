@@ -50,6 +50,11 @@ button{font-size:16px;padding:12px 18px;border-radius:8px;border:1px solid var(-
 .acts{display:flex;gap:10px;margin-top:6px}
 .acts .go2{flex:2;background:var(--acc);border-color:var(--acc)}
 .acts .cn{flex:1;background:#fff;color:var(--ink);border:1px solid var(--line)}
+.opt input{font-size:17px;margin:0;padding:8px}
+.opt.w{flex-wrap:wrap}
+.opt.w button{flex:0 0 auto;padding:8px 12px;font-size:15px}
+.rs-b{display:flex;gap:14px}
+#sheet .box{max-height:92vh;overflow:auto}
 .lk{background:none;border:none;color:var(--sub);text-decoration:underline;font-size:13px;padding:8px 0}
 </style>
 </head>
@@ -99,7 +104,7 @@ function draw(){
     } else {
       b=`<div class="row"><span class="nm">卓${n}</span><span class="tag">${t.kind==='rental'?'空席 ・ タップで開始':'空席'}</span></div>`;
     }
-    (t.resv||[]).forEach(r=>{ b+=`<div class="resv"><b>予約 ${hm(r.at)}</b>${r.name?' '+esc(r.name)+' 様':''}${r.phone?' '+esc(r.phone):''}${(r.lines||[]).map(l=>'<br>'+esc(l)).join('')}</div>`; });
+    (t.resv||[]).forEach(r=>{ b+=`<div class="resv"><b>予約 ${hm(r.at)}</b>${r.name?' '+esc(r.name)+' 様':''}${r.phone?' '+esc(r.phone):''}${(r.lines||[]).map(l=>'<br>'+esc(l)).join('')}<div class="rs-b"><button class="lk" data-redit="${esc(r.id)}" data-rn="${n}">編集</button><button class="lk" data-rcx="${esc(r.id)}" data-rn="${n}" style="color:var(--red)">予約をキャンセル</button></div></div>`; });
     const can=t.kind==='rental';
     h+=`<div class="t ${t.kind==='rental'&&t.start?'rental':t.kind==='free'?'free':'vacant'}${can?' go':''}"${can?' data-n="'+n+'"':''}>${b}</div>`;
   });
@@ -112,13 +117,15 @@ function drawSheet(){
   const el=$('sheet'); el.classList.toggle('on',!!sh); if(!sh) return;
   if(sh.mode==='pay'){ el.querySelector('.box').innerHTML=paySheet(); return; }
   if(sh.mode==='edit'){ el.querySelector('.box').innerHTML=editSheet(); return; }
+  if(sh.mode==='resv'){ el.querySelector('.box').innerHTML=resvSheet(); return; }
   el.querySelector('.box').innerHTML=`<h2>卓${sh.n} を開始</h2>
   <div class="lab">人数</div><div class="opt"><button class="sq" data-d="-1">−</button><span class="n">${sh.people}</span><button class="sq" data-d="1">＋</button></div>
   <div class="lab">区分</div><div class="opt">${OPT('cust','general','一般')}${OPT('cust','student','学生')}</div>
   <div class="lab">プラン</div><div class="opt">${OPT('plan','hourly','通常')}${OPT('plan','pack','6時間パック')}</div>
   <div class="lab">ドリンクバー</div><div class="opt">${OPT('drink',0,'なし')}${OPT('drink',1,'あり')}</div>
   <div class="lab">開始時刻(すでに始まっているときだけ。空ならいま)</div><div class="opt"><input id="stHm" type="time" value="${sh.hm||''}"></div>
-  <div class="acts"><button class="cn" data-x="cancel">やめる</button><button class="go2" data-x="go">開始する</button></div>`;
+  <div class="acts"><button class="cn" data-x="cancel">やめる</button><button class="go2" data-x="go">開始する</button></div>
+  <button class="lk" data-x="toresv">この卓に予約を入れる</button>`;
 }
 function paySheet(){
   const t=snap&&snap.tables[sh.n]; if(!t||!t.start) return '<h2>卓'+sh.n+'</h2><p>この卓は、もう使用中ではありません。</p><div class="acts"><button class="cn" data-x="cancel">閉じる</button></div>';
@@ -126,7 +133,7 @@ function paySheet(){
   return `<h2>卓${sh.n} の会計</h2><p class="sub">${hm(t.start)} 開始 ・ ${tags}</p><div class="lab">会計額</div><div class="amt" style="font-size:34px">${yen(t.total)}</div>
   <p class="sub">金額は、数秒ごとに更新されます。押した時点の金額と違っていたら、会計せずに知らせます。</p>
   <div class="acts"><button class="cn" data-x="cancel">やめる</button><button class="go2" data-x="done">会計完了</button></div>
-  <div class="acts"><button class="cn" data-x="toedit">修正する</button></div>
+  <div class="acts"><button class="cn" data-x="toedit">修正する</button><button class="cn" data-x="toresv">予約を入れる</button></div>
   <button class="lk" data-x="del" style="color:var(--red)">この卓を取り消す(記録しない)</button>`;
 }
 function editSheet(){
@@ -140,6 +147,9 @@ function editSheet(){
 }
 function toast(msg,bad){ const t=$('toast'); t.textContent=msg; t.className=bad?'bad':''; t.style.display='block'; clearTimeout(toast.h); toast.h=setTimeout(()=>{t.style.display='none';},bad?8000:4000); }
 $('main').addEventListener('click',e=>{
+  const re=e.target.closest('[data-redit]'), rc=e.target.closest('[data-rcx]');
+  if(re){ const n=+re.dataset.rn, r=((snap.tables[n]||{}).resv||[]).filter(x=>x.id===re.dataset.redit)[0]; if(r){ sh=resvDraft(n,r); drawSheet(); } return; }
+  if(rc){ const n=+rc.dataset.rn; if(!confirm('卓'+n+'の予約をキャンセルします。よろしいですか?')) return; sendCmd({type:'resvCancel',table:n,rid:rc.dataset.rcx},rc,'予約をキャンセル'); return; }
   const c=e.target.closest('.t.go'); if(!c) return; const n=+c.dataset.n, t=snap&&snap.tables[n];
   if(t&&t.start) sh={mode:'pay',n}; else sh={mode:'start',n,people:4,cust:'general',plan:'hourly',drink:0};
   drawSheet();
@@ -147,9 +157,25 @@ $('main').addEventListener('click',e=>{
 $('sheet').addEventListener('click',e=>{
   if(e.target.id==='sheet'){ sh=null; drawSheet(); return; }
   const b=e.target.closest('button'); if(!b||!sh) return;
-  if(b.dataset.d) sh.people=Math.min(12,Math.max(1,sh.people+(+b.dataset.d)));
+
+  if($('stHm')) sh.hm=$('stHm').value;   // 選択ボタンで画面を作り直しても、入れた時刻が消えないように
+  syncR();
+  if(b.dataset.rk){ const v=b.dataset.rv; rtog(b.dataset.rk, (v==='other')?'other':(isNaN(+v)?v:+v)); drawSheet(); return; }  if(b.dataset.d) sh.people=Math.min(12,Math.max(1,sh.people+(+b.dataset.d)));
   else if(b.dataset.k) sh[b.dataset.k]=(b.dataset.k==='drink')?+b.dataset.v:b.dataset.v;
   else if(b.dataset.x==='cancel'){ sh=null; }
+  else if(b.dataset.x==='toresv'){ sh=resvDraft(sh.n,null); }
+  else if(b.dataset.x==='rsave'){
+    if(!sh.time||!sh.date){ toast('開始時刻を入れてください',true); return; }
+    const pv=sh.pts==='other'?+sh.ptsOther:sh.pts;
+    const rule={}; if(sh.pn) rule.n=sh.pn; if(pv>0) rule.pts=pv;
+    ['red','gold'].forEach(g=>{ const o={}; ['m','p','s'].forEach(x=>{ if(sh[g][x]!=null) o[x]=sh[g][x]; }); if(Object.keys(o).length) rule[g]=o; });
+    if(sh.white!=null) rule.white=sh.white; if(sh.hana!=null) rule.hana=sh.hana;
+    sendCmd({type:'resvSave',table:sh.n,rid:sh.rid,date:sh.date,time:sh.time,name:sh.name.trim(),phone:sh.phone.trim(),rule},b,'予約を保存'); return;
+  }
+  else if(b.dataset.x==='rdel'){
+    if(!confirm('卓'+sh.n+'の予約をキャンセルします。よろしいですか?')) return;
+    sendCmd({type:'resvCancel',table:sh.n,rid:sh.rid},b,'予約をキャンセル'); return;
+  }
   else if(b.dataset.x==='toedit'){
     const t=snap&&snap.tables[sh.n]; if(!t||!t.start) return;
     sh={mode:'edit',n:sh.n,people:t.people,cust:t.cust,plan:t.plan,drink:t.drink?1:0,hm:hm(t.start)};
@@ -188,6 +214,33 @@ $('sheet').addEventListener('click',e=>{
   drawSheet();
 });
 // 送ったあとは、結果が返るまで2秒ごとに確認する(最大30秒)
+const nz=()=>({m:null,p:null,s:null});
+function resvDraft(n,r){
+  const d=new Date(r?r.at:Date.now()-6*3600000), ymd=d.getFullYear()+'-'+q(d.getMonth()+1)+'-'+q(d.getDate());
+  const u=(r&&r.rule)||{}, pt=u.pts?((u.pts===25000||u.pts===35000)?u.pts:'other'):null;
+  return {mode:'resv',n,rid:r?r.id:null,date:ymd,time:r?hm(r.at):'',name:r?r.name:'',phone:r?r.phone:'',
+    pn:u.n||null,pts:pt,ptsOther:pt==='other'?u.pts:'',red:Object.assign(nz(),u.red),gold:Object.assign(nz(),u.gold),white:u.white==null?null:u.white,hana:u.hana==null?null:u.hana};
+}
+function syncR(){ if(!sh||sh.mode!=='resv') return; const g=id=>$(id); if(g('rDate')) sh.date=g('rDate').value; if(g('rTime')) sh.time=g('rTime').value; if(g('rName')) sh.name=g('rName').value; if(g('rTel')) sh.phone=g('rTel').value; if(g('rPts')) sh.ptsOther=g('rPts').value; }
+function rget(path){ const ks=path.split('.'); let o=sh; for(const k of ks) o=o==null?o:o[k]; return o; }
+function rtog(path,val){ const ks=path.split('.'); let o=sh; for(let i=0;i<ks.length-1;i++) o=o[ks[i]]; const k=ks[ks.length-1]; o[k]=(String(o[k])===String(val))?null:val; }
+function resvSheet(){
+  const b=(k,v,l)=>`<button class="${String(rget(k))===String(v)?'sel':''}" data-rk="${k}" data-rv="${v}">${l}</button>`;
+  const suit=(g,x,nm)=>`<div class="lab">${nm}</div><div class="opt w">${[0,1,2,3,4].map(n=>b(g+'.'+x,n,n===0?'なし':n+'枚')).join('')}</div>`;
+  return `<h2>卓${sh.n} の予約${sh.rid?'を編集':''}</h2><p class="sub">開始時刻だけ必須。ほかは入れたときだけ表示されます。押し直すと外れます。</p>
+  <div class="lab">日付</div><div class="opt"><input id="rDate" type="date" value="${sh.date}"></div>
+  <div class="lab">開始(必須)</div><div class="opt"><input id="rTime" type="time" value="${sh.time}"></div>
+  <div class="lab">お名前</div><div class="opt"><input id="rName" type="text" value="${esc(sh.name)}"></div>
+  <div class="lab">連絡先</div><div class="opt"><input id="rTel" type="tel" value="${esc(sh.phone)}"></div>
+  <div class="lab">何人打ち</div><div class="opt">${b('pn',3,'3人打ち')}${b('pn',4,'4人打ち')}</div>
+  <div class="lab">何点持ち</div><div class="opt w">${b('pts',25000,'25000')}${b('pts',35000,'35000')}${b('pts','other','その他')}${sh.pts==='other'?`<input id="rPts" type="number" inputmode="numeric" placeholder="点数" value="${esc(sh.ptsOther)}" style="max-width:110px">`:''}</div>
+  <div class="lab"><b>赤5</b></div>${suit('red','m','萬子')}${suit('red','p','筒子')}${suit('red','s','索子')}
+  <div class="lab"><b>金5</b></div>${suit('gold','m','萬子')}${suit('gold','p','筒子')}${suit('gold','s','索子')}
+  <div class="lab">白ポッチ</div><div class="opt">${b('white',1,'あり')}${b('white',0,'なし')}</div>
+  <div class="lab">華(花牌)</div><div class="opt">${b('hana',1,'使う')}${b('hana',0,'使わない')}</div>
+  <div class="acts"><button class="cn" data-x="cancel">やめる</button><button class="go2" data-x="rsave">予約を保存</button></div>
+  ${sh.rid?'<button class="lk" data-x="rdel" style="color:var(--red)">この予約をキャンセル</button>':''}`;
+}
 function sendCmd(cmd,b,label){
   cmd.id='c'+Date.now()+Math.random().toString(36).slice(2,6);
   const t0=b.textContent; b.disabled=true; b.textContent='送信中…';
