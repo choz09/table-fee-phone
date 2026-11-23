@@ -64,10 +64,10 @@ function draw(){
   $('login').style.display='none';
   if(!snap){ st.textContent='会計ツールからのデータがありません'; st.className='bad'; m.innerHTML=''; return; }
   const now=Date.now()+skew, age=Math.round((now-snap.ts)/1000);
-  st.textContent = age>30 ? '会計ツール(NEC)が'+(age>120?Math.round(age/60)+'分':age+'秒')+'前から止まっています' : 'NECと接続中 ('+hm(snap.ts)+' 更新)';
+  st.textContent = age>30 ? '会計ツール ( NEC ) が'+(age>120?Math.round(age/60)+'分':age+'秒')+'前から止まっています' : 'NECと接続中 ( '+hm(snap.ts)+' 更新 )';
   st.className = age>30 ? 'bad' : '';
   const s=snap.sales;
-  let h=`<div class="sales"><table><tr><td>フリー</td><td>${s.free==null?'－':yen(s.free)}</td></tr><tr><td>貸卓 (${s.rentN}組)</td><td>${yen(s.rent)}</td></tr></table><small>今日の売上 合計</small><div class="big">${yen((s.free||0)+s.rent)}</div></div>`;
+  let h=`<div class="sales"><table><tr><td>フリー</td><td>${s.free==null?'－':yen(s.free)}</td></tr><tr><td>貸卓 ( ${s.rentN}組 )</td><td>${yen(s.rent)}</td></tr></table><small>今日の売上 合計</small><div class="big">${yen((s.free||0)+s.rent)}</div></div>`;
   snap.order.slice().sort((a,b)=>a-b).forEach(n=>{   // スマホは卓1→6の順(NECの画面の並びとは別)
     const t=snap.tables[n]; if(!t) return;
     let b='';
@@ -76,7 +76,7 @@ function draw(){
       const tags=[t.cust==='student'?'学生':'一般', t.people+'人', t.special?'特別料金':(t.plan==='pack'?'6時間パック':'通常'), t.drink?'ドリンクバー':'', t.coupons.length?'クーポン'+t.coupons.length+'枚':''].filter(Boolean).join(' ・ ');
       b=`<div class="row"><span class="nm">卓${n} 貸卓</span><span class="clk">${q(hh)}:${q(mi)}:${q(s2)}</span></div><div class="row"><span class="sub">${hm(t.start)} 開始 ・ ${tags}</span><span class="amt">${yen(t.total)}</span></div>`;
     } else if(t.kind==='free'){
-      b=`<div class="row"><span class="nm">卓${n} フリー${t.freeOpen?' (稼働中)':''}</span><span class="sub">精算済み ${yen(t.freeAmt||0)}</span></div>`;
+      b=`<div class="row"><span class="nm">卓${n} フリー${t.freeOpen?' ( 稼働中 )':''}</span><span class="sub">精算済み ${yen(t.freeAmt||0)}</span></div>`;
     } else {
       b=`<div class="row"><span class="nm">卓${n}</span><span class="tag">空席</span></div>`;
     }
